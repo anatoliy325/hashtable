@@ -14,15 +14,12 @@ class hashtable(object):
 	print hash_algs
 	self.hash_algs = hash_algs
         self.con.execute('create table wordlist(word)')
-	hash_query = "create table hashlist("
-	for alg in self.hash_algs:
-            hash_query += alg+','
-	hash_query += "wordid integer)"
-	self.con.execute(hash_query)
-        self.con.execute('create index hashwordidx on hashlist(wordid)')
-	for alg in self.hash_algs:
-	    self.con.execute('create index %s on hashlist(%s)' % (alg+'idx',alg))
-
+        for alg in self.hash_algs:
+            self.con.execute('create table %s(hash,wordid)' % alg)
+            self.con.execute('create index %s on %s(hash)' % (alg+'hidx',alg))
+            self.con.execute('create index %s on %s(wordid)' % (alg+'widx',alg))
+        self.con.commit()
+        
     def getwordid(self, word):
         res = self.con.execute("select rowid from wordlist where word='%s'" % word).fetchone()
         if res == None:
@@ -33,7 +30,7 @@ class hashtable(object):
 
     def isexists(self,hash_value,hash_alg='md5'):
 	if hash_alg not in self.hash_algs: return None
-	h = self.con.execute("select wordid from hashlist where %s='%s'" \
+	h = self.con.execute("select wordid from %s where hash='%s'" \
 		% (hash_alg,hash_value)).fetchone()
 	if h != None:
 	    w = self.con.execute("select * from wordlist where rowid='%d'" \
@@ -48,12 +45,12 @@ class hashtable(object):
 	    wordid = self.getwordid(word)
 	    #cur = self.con.execute("insert into hashlist(%s,wordid) values ('%s','%d')" \
 			#% (hash_alg,hash_value,wordid))
-	    u = self.con.execute('select * from hashlist where wordid=%d' % wordid).fetchone()
+	    u = self.con.execute('select * from %s where wordid=%d' % (hash_alg,wordid)).fetchone()
 	    if u != None:
-		cur = self.con.execute("update hashlist set %s='%s' where wordid=%d" \
+		cur = self.con.execute("update %s set hash='%s' where wordid=%d" \
 			% (hash_alg,hash_value,wordid))
 	    else:
-		cur = self.con.execute("insert into hashlist(%s,wordid) values ('%s','%d')" \
+		cur = self.con.execute("insert into %s(hash,wordid) values ('%s','%d')" \
 			% (hash_alg,hash_value,wordid))
 	    self.commit()
 	    return cur.lastrowid
@@ -61,9 +58,8 @@ class hashtable(object):
 
     def search(self, hash_value,hash_alg='md5'):
 	if hash_alg not in self.hash_algs: return None
-	wordid = self.con.execute("select wordid from hashlist where %s='%s'" \
+	wordid = self.con.execute("select wordid from %s where hash='%s'" \
 			% (hash_alg,hash_value)).fetchone()[0]
 	return self.con.execute("select word from wordlist where rowid='%d'" \
 		% wordid).fetchone()[0]
-
 
